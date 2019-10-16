@@ -61,6 +61,9 @@ MagGeometry::MagGeometry(int geomVersion,
     theEndcapBinFinder = new PeriodicBinFinderInPhi<float>(firstPhi, nEBins);
   }
 
+  if (!theEndcapBinFinder || theESectors.empty())
+    edm::LogError("MagGeometry") << "Endcap empty";
+
   // Compute barrel dimensions based on geometry version
   switch (geomVersion >= 120812 ? 0 : (geomVersion >= 90812 ? 1 : 2)) {
     case 0:
@@ -179,11 +182,8 @@ MagVolume const* MagGeometry::findVolume(const GlobalPoint& gp, double tolerance
     }
   } else {  // Endcaps
     Geom::Phi<float> phi = gp.phi();
-    if (theEndcapBinFinder && !theESectors.empty()) {
-      int bin = theEndcapBinFinder->binIndex(phi);
-      result = theESectors[bin]->findVolume(gp, tolerance);
-    } else
-      edm::LogError("MagGeometry") << "Endcap empty";
+    int bin = theEndcapBinFinder->binIndex(phi);
+    result = theESectors[bin]->findVolume(gp, tolerance);
   }
 
   if (!result && tolerance < 0.0001) {
