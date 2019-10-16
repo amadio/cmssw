@@ -172,14 +172,13 @@ MagVolume const* MagGeometry::findVolume(const GlobalPoint& gp, double tolerance
   float Z = fabs(gp.z());
 
   if (inBarrel(R, Z)) {  // Barrel
-    int bin = theBarrelBinFinder->binIndex(R);
-
     // Search up to 3 layers inwards. This may happen for very thin layers.
-    for (int bin1 = bin; bin1 >= max(0, bin - 3); --bin1) {
-      result = theBLayers[bin1]->findVolume(gp, tolerance);
-      if (result)
+    int bin_hi = theBarrelBinFinder->binIndex(R);
+    int bin_lo = max(0, bin_hi - 3);
+
+    for (int bin = bin_hi; bin >= bin_lo; --bin)
+      if ((result = theBLayers[bin]->findVolume(gp, tolerance)))
         break;
-    }
   } else {  // Endcaps
     Geom::Phi<float> phi = gp.phi();
     int bin = theEndcapBinFinder->binIndex(phi);
