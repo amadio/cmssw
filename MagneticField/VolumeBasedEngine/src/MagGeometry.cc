@@ -46,10 +46,9 @@ MagGeometry::MagGeometry(int geomVersion,
       cacheLastVolume(true),
       geometryVersion(geomVersion) {
   vector<double> rBorders;
-
-  for (vector<MagBLayer const*>::const_iterator ilay = theBLayers.begin(); ilay != theBLayers.end(); ++ilay) {
+  for (const auto& layer : theBLayers) {
     //FIXME assume layers are already sorted in minR
-    rBorders.push_back((*ilay)->minR());
+    rBorders.push_back(layer->minR());
   }
 
   theBarrelBinFinder = new MagBinFinders::GeneralBinFinderInR<double>(rBorders);
@@ -57,8 +56,10 @@ MagGeometry::MagGeometry(int geomVersion,
   //FIXME assume sectors are already sorted in phi
   //FIXME: PeriodicBinFinderInPhi gets *center* of first bin
   int nEBins = theESectors.size();
-  if (nEBins > 0)
-    theEndcapBinFinder = new PeriodicBinFinderInPhi<float>(theESectors.front()->minPhi() + Geom::pi() / nEBins, nEBins);
+  if (nEBins > 0) {
+    float firstPhi = theESectors.front()->minPhi() + Geom::pi() / nEBins;
+    theEndcapBinFinder = new PeriodicBinFinderInPhi<float>(firstPhi, nEBins);
+  }
 
   // Compute barrel dimensions based on geometry version
   switch (geomVersion >= 120812 ? 0 : (geomVersion >= 90812 ? 1 : 2)) {
@@ -87,34 +88,24 @@ MagGeometry::MagGeometry(int geomVersion,
 }
 
 MagGeometry::~MagGeometry() {
-  if (theBarrelBinFinder != nullptr)
-    delete theBarrelBinFinder;
-  if (theEndcapBinFinder != nullptr)
-    delete theEndcapBinFinder;
+  delete theBarrelBinFinder;
+  delete theEndcapBinFinder;
 
-  for (vector<MagBLayer const*>::const_iterator ilay = theBLayers.begin(); ilay != theBLayers.end(); ++ilay) {
-    delete (*ilay);
-  }
+  for (const auto& layer : theBLayers)
+    delete layer;
 
-  for (vector<MagESector const*>::const_iterator ilay = theESectors.begin(); ilay != theESectors.end(); ++ilay) {
-    delete (*ilay);
-  }
+  for (const auto& sector : theESectors)
+    delete sector;
 }
 
 // Return field vector at the specified global point
 GlobalVector MagGeometry::fieldInTesla(const GlobalPoint& gp) const {
-  MagVolume const* v = nullptr;
-
-  v = findVolume(gp);
-  if (v != nullptr) {
+  if (const auto v = findVolume(gp))
     return v->fieldInTesla(gp);
-  }
 
   // Fall-back case: no volume found
-
   if (edm::isNotFinite(gp.mag())) {
     LogWarning("InvalidInput") << "Input value invalid (not a number): " << gp << endl;
-
   } else {
     LogWarning("MagneticField") << "MagGeometry::fieldInTesla: failed to find volume for " << gp << endl;
   }
@@ -131,8 +122,8 @@ MagVolume const* MagGeometry::findVolume1(const GlobalPoint& gp, double toleranc
   float Z = fabs(gp.z());
 
   if (inBarrel(R, Z)) {  // Barrel
-    for (vector<MagVolume6Faces const*>::const_iterator v = theBVolumes.begin(); v != theBVolumes.end(); ++v) {
-      if ((*v) == nullptr) {  //FIXME: remove this check
+    for (const auto& v : theBVolumes) {
+      if (!v) {  //FIXME: remove this check
         cout << endl << "***ERROR: MagGeometry::findVolume: MagVolume for barrel not set" << endl;
         ++errCnt;
         if (errCnt < 3)
@@ -140,15 +131,14 @@ MagVolume const* MagGeometry::findVolume1(const GlobalPoint& gp, double toleranc
         else
           break;
       }
-      if ((*v)->inside(gp, tolerance)) {
-        found = (*v);
+      if (v->inside(gp, tolerance)) {
+        found = v;
         break;
       }
     }
-
   } else {  // Endcaps
-    for (vector<MagVolume6Faces const*>::const_iterator v = theEVolumes.begin(); v != theEVolumes.end(); ++v) {
-      if ((*v) == nullptr) {  //FIXME: remove this check
+    for (const auto& v : theEVolumes) {
+      if (!v) {  //FIXME: remove this check
         cout << endl << "***ERROR: MagGeometry::findVolume: MagVolume for endcap not set" << endl;
         ++errCnt;
         if (errCnt < 3)
@@ -156,8 +146,8 @@ MagVolume const* MagGeometry::findVolume1(const GlobalPoint& gp, double toleranc
         else
           break;
       }
-      if ((*v)->inside(gp, tolerance)) {
-        found = (*v);
+      if (v->inside(gp, tolerance)) {
+        found = v;
         break;
       }
     }
@@ -184,20 +174,19 @@ MagVolume const* MagGeometry::findVolume(const GlobalPoint& gp, double tolerance
     // Search up to 3 layers inwards. This may happen for very thin layers.
     for (int bin1 = bin; bin1 >= max(0, bin - 3); --bin1) {
       result = theBLayers[bin1]->findVolume(gp, tolerance);
-      if (result != nullptr)
+      if (result)
         break;
     }
-
   } else {  // Endcaps
     Geom::Phi<float> phi = gp.phi();
-    if (theEndcapBinFinder != nullptr && !theESectors.empty()) {
+    if (theEndcapBinFinder && !theESectors.empty()) {
       int bin = theEndcapBinFinder->binIndex(phi);
       result = theESectors[bin]->findVolume(gp, tolerance);
     } else
       edm::LogError("MagGeometry") << "Endcap empty";
   }
 
-  if (result == nullptr && tolerance < 0.0001) {
+  if (!result && tolerance < 0.0001) {
     // If search fails, retry with a 300 micron tolerance.
     // This is a hack for thin gaps on air-iron boundaries,
     // which will not be present anymore once surfaces are matched.
