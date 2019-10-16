@@ -48,19 +48,11 @@ MagGeometry::MagGeometry(int geomVersion,
   vector<double> rBorders;
 
   for (vector<MagBLayer const*>::const_iterator ilay = theBLayers.begin(); ilay != theBLayers.end(); ++ilay) {
-    if (verbose::debugOut)
-      cout << "  Barrel layer at " << (*ilay)->minR() << endl;
     //FIXME assume layers are already sorted in minR
     rBorders.push_back((*ilay)->minR());
   }
 
   theBarrelBinFinder = new MagBinFinders::GeneralBinFinderInR<double>(rBorders);
-
-  if (verbose::debugOut) {
-    for (vector<MagESector const*>::const_iterator isec = theESectors.begin(); isec != theESectors.end(); ++isec) {
-      cout << "  Endcap sector at " << (*isec)->minPhi() << endl;
-    }
-  }
 
   //FIXME assume sectors are already sorted in phi
   //FIXME: PeriodicBinFinderInPhi gets *center* of first bin
@@ -191,11 +183,7 @@ MagVolume const* MagGeometry::findVolume(const GlobalPoint& gp, double tolerance
 
     // Search up to 3 layers inwards. This may happen for very thin layers.
     for (int bin1 = bin; bin1 >= max(0, bin - 3); --bin1) {
-      if (verbose::debugOut)
-        cout << "Trying layer at R " << theBLayers[bin1]->minR() << " " << R << endl;
       result = theBLayers[bin1]->findVolume(gp, tolerance);
-      if (verbose::debugOut)
-        cout << "***In blayer " << bin1 - bin << " " << (result == nullptr ? " failed " : " OK ") << endl;
       if (result != nullptr)
         break;
     }
@@ -204,11 +192,7 @@ MagVolume const* MagGeometry::findVolume(const GlobalPoint& gp, double tolerance
     Geom::Phi<float> phi = gp.phi();
     if (theEndcapBinFinder != nullptr && !theESectors.empty()) {
       int bin = theEndcapBinFinder->binIndex(phi);
-      if (verbose::debugOut)
-        cout << "Trying endcap sector at phi " << theESectors[bin]->minPhi() << " " << phi << endl;
       result = theESectors[bin]->findVolume(gp, tolerance);
-      if (verbose::debugOut)
-        cout << "***In guessed esector " << (result == nullptr ? " failed " : " OK ") << endl;
     } else
       edm::LogError("MagGeometry") << "Endcap empty";
   }
@@ -217,8 +201,6 @@ MagVolume const* MagGeometry::findVolume(const GlobalPoint& gp, double tolerance
     // If search fails, retry with a 300 micron tolerance.
     // This is a hack for thin gaps on air-iron boundaries,
     // which will not be present anymore once surfaces are matched.
-    if (verbose::debugOut)
-      cout << "Increasing the tolerance to 0.03" << endl;
     result = findVolume(gp, 0.03);
   }
 
